@@ -34,6 +34,7 @@ Setup registers MACX with your agent and installs matching workflow instructions
 - [🚀 Quick start](#quick-start)
 - [🔍 How MACX works](#how-macx-works)
 - [🎯 What you can analyze](#what-you-can-analyze)
+- [✅ Features & Roadmap](#features--roadmap)
 - [❓ FAQ](#faq)
 - [📚 Documentation](#documentation)
 - [⚖️ Disclaimer](#disclaimer)
@@ -124,6 +125,14 @@ Static JavaScript and .NET inspection read the supplied files without running
 the application.
 
 For native-binary inspection, MACX supports Hopper, Ghidra, and IDA providers.
+
+## ✅ Features & Roadmap
+
+See **[FEATURES.md](FEATURES.md)** for the complete feature inventory and roadmap.
+
+**Currently working:** MCP server (stdio), 4 MCP tools, 5 CLI commands, structured logging, config validation, graceful shutdown, Vitest test suite.
+
+**Next up (P0):** JavaScript/Electron static analysis engine, desktop app discovery, interactive setup wizard.
 
 ## ❓ FAQ
 
