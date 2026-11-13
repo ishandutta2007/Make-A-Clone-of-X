@@ -40,6 +40,58 @@ macx analyze-javascript-application /path/to/app --source-maps
 - Top package dependencies
 - Warnings and errors
 
+### `macx discover-apps`
+
+Scan the system for installed desktop applications, detect their type (Electron, native, NW.js, web-wrapper), find bundled JavaScript, and identify frameworks.
+
+```bash
+# Human-readable summary
+macx discover-apps
+
+# Full JSON output
+macx discover-apps --json
+
+# Filter to Electron apps only
+macx discover-apps --type electron
+
+# Limit results
+macx discover-apps --limit 20
+
+# Scan an additional custom directory
+macx discover-apps --path /opt/custom-apps
+
+# Skip user-specific directories
+macx discover-apps --no-user-apps
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output full discovery result as JSON |
+| `--type <type>` | Filter by app type: `electron`, `native`, `nw.js`, `web-wrapper`, `pwa`, `unknown` |
+| `--limit <count>` | Maximum number of apps to return |
+| `--no-user-apps` | Skip user-specific app directories |
+| `--path <path>` | Additional directory to scan |
+
+### `macx discover-app <path>`
+
+Analyze a single application at the given path to detect its type, bundled JavaScript, and frameworks.
+
+```bash
+# Human-readable output
+macx discover-app /Applications/Slack.app
+
+# JSON output
+macx discover-app "C:\Program Files\VS Code" --json
+```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--json` | Output result as JSON |
+
 ### `macx setup`
 
 Configure MACX with your agents and analysis providers.

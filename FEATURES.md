@@ -9,6 +9,8 @@
 | **Stdio transport** | ✅ Working | MCP server over stdin/stdout for agent integration |
 | **`macx_doctor` tool** | ✅ Working | Reports MACX version, Node.js version, platform, and arch |
 | **`analyze_javascript_application` tool** | ✅ Working | Full JS/TS static analysis: module discovery, import/export extraction, Electron detection, framework detection, import graph, entry points, source maps |
+| **`discover_applications` tool** | ✅ Working | Scan system for installed desktop apps; detects type, frameworks, bundled JS |
+| **`discover_single_app` tool** | ✅ Working | Analyze a single app at a specific path for type, JS bundles, frameworks |
 | **`inspect_binary` tool** | 🟡 Stub | Accepts binary path and provider selection; returns stub response |
 | **`inspect_website` tool** | 🟡 Stub | Accepts URL and screenshot flag; returns stub response |
 | **Zod input validation** | ✅ Working | All MCP tool inputs validated via Zod schemas |
@@ -23,6 +25,8 @@
 | **`macx setup`** | 🟡 Manual | Prints manual MCP registration instructions (no interactive wizard yet) |
 | **`macx update`** | 🟡 Manual | Prints `npm install --global` instructions (no automated updater yet) |
 | **`macx analyze-javascript-application <path>`** | ✅ Working | Full JS/TS static analysis with human-readable and `--json` output; `--source-maps` option |
+| **`macx discover-apps`** | ✅ Working | Scan system for installed desktop apps with `--json`, `--type`, `--limit` options |
+| **`macx discover-app <path>`** | ✅ Working | Analyze a single application at a given path with `--json` output |
 | **`macx --help`** | ✅ Working | Built-in help via Incur CLI framework |
 | **`macx --version`** | ✅ Working | Version output via Incur |
 
@@ -50,7 +54,7 @@
 | Feature | Priority | Description |
 |---------|----------|-------------|
 | ~~**JavaScript/Electron static analysis engine**~~ | ✅ Done | ~~Actual module graph extraction, import resolution, source map parsing, and Electron IPC tracing for JS apps.~~ Implemented in v1.0.0 — see `src/javascript/`. |
-| **Desktop application discovery** | 🔴 P0 | Scan common install locations on macOS/Windows/Linux to find installed apps, their executables, bundled JS, and frameworks. Enables the core "see a feature → clone it" workflow. |
+| ~~**Desktop application discovery**~~ | ✅ Done | ~~Scan common install locations on macOS/Windows/Linux to find installed apps, their executables, bundled JS, and frameworks.~~ Implemented in v1.0.0 — see `src/discovery/`. |
 | **Interactive setup wizard** | 🔴 P0 | Walk the user through agent registration (Claude Code, Codex, Cursor, Gemini CLI, etc.) with config file detection, backup, and write — replacing the current manual instructions. |
 
 ### 🟠 High — Important for Production Use

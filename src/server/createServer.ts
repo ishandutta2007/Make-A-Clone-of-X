@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 import { PRODUCT_IDENTITY } from "../identity.js";
 import { PACKAGE_METADATA } from "../generatedPackageMetadata.js";
 import { analyzeJavaScriptApplication } from "../javascript/index.js";
+import { discoverApplications, discoverSingleApp } from "../discovery/index.js";
 
 /**
  * Create the MACX MCP server with the core tool catalog.
@@ -80,6 +81,109 @@ export const createMacxServer = (logger: Logger): McpServer => {
                   error: message,
                   status: "error",
                 },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // --- Discover desktop applications ---
+  server.tool(
+    "discover_applications",
+    "Scan the system for installed desktop applications and identify their type (Electron, native, web-wrapper), bundled JavaScript, and frameworks.",
+    {
+      additionalPaths: z.array(z.string()).optional().describe("Additional directories to scan beyond platform defaults."),
+      includeUserApps: z.boolean().optional().default(true).describe("Include user-specific app directories."),
+      filterType: z.enum(["electron", "nw.js", "native", "web-wrapper", "pwa", "unknown"]).optional().describe("Filter results by app type."),
+      limit: z.number().optional().describe("Maximum number of apps to return."),
+    },
+    async ({ additionalPaths, includeUserApps, filterType, limit }) => {
+      logger.info({ additionalPaths, includeUserApps, filterType, limit }, "discover_applications invoked");
+      try {
+        const result = await discoverApplications({
+          additionalPaths,
+          includeUserApps,
+          filterType: filterType as "electron" | "nw.js" | "native" | "web-wrapper" | "pwa" | "unknown" | undefined,
+          limit,
+        });
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(result, null, 2),
+            },
+          ],
+        };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        logger.error({ error: message }, "discover_applications failed");
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                { tool: "discover_applications", error: message, status: "error" },
+                null,
+                2,
+              ),
+            },
+          ],
+          isError: true,
+        };
+      }
+    },
+  );
+
+  // --- Discover single application ---
+  server.tool(
+    "discover_single_app",
+    "Analyze a single application at a specific path to detect its type, bundled JavaScript, and frameworks.",
+    {
+      path: z.string().describe("Absolute path to the application bundle or directory."),
+    },
+    async ({ path: appPath }) => {
+      logger.info({ appPath }, "discover_single_app invoked");
+      try {
+        const app = await discoverSingleApp(appPath);
+
+        if (!app) {
+          return {
+            content: [
+              {
+                type: "text" as const,
+                text: JSON.stringify(
+                  { path: appPath, status: "not_found", message: "No application detected at the given path." },
+                  null,
+                  2,
+                ),
+              },
+            ],
+          };
+        }
+
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(app, null, 2),
+            },
+          ],
+        };
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        logger.error({ appPath, error: message }, "discover_single_app failed");
+        return {
+          content: [
+            {
+              type: "text" as const,
+              text: JSON.stringify(
+                { tool: "discover_single_app", path: appPath, error: message, status: "error" },
                 null,
                 2,
               ),

@@ -14,6 +14,7 @@ import { parseLogLevel } from "./config/processStart.js";
 import { PRODUCT_IDENTITY } from "./identity.js";
 import { PACKAGE_METADATA } from "./generatedPackageMetadata.js";
 import { analyzeJavaScriptApplication } from "./javascript/index.js";
+import { discoverApplications, discoverSingleApp } from "./discovery/index.js";
 
 export interface CliInstance {
   serve: (
@@ -176,6 +177,134 @@ export const createCli = (
             if (analysis.errors.length > 10) {
               process.stdout.write(`  ... and ${analysis.errors.length - 10} more\n`);
             }
+          }
+
+          process.stdout.write(`\n`);
+        }
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        process.stderr.write(`MACX error: ${message}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  // --- discover-apps command ---
+  cli.command(
+    "discover-apps",
+    "Scan the system for installed desktop applications.",
+  )
+    .option("--json", "Output results as JSON.", { default: false })
+    .option("--type <type>", "Filter by app type (electron, native, nw.js, web-wrapper, pwa, unknown).")
+    .option("--limit <count>", "Maximum number of apps to return.")
+    .option("--no-user-apps", "Skip user-specific app directories.")
+    .option("--path <path>", "Additional directory to scan.")
+    .action(async (options: { json: boolean; type?: string; limit?: string; userApps?: boolean; path?: string }) => {
+      logger.info({ options }, "discover-apps command invoked");
+
+      try {
+        const result = await discoverApplications({
+          additionalPaths: options.path ? [options.path] : undefined,
+          includeUserApps: options.userApps !== false,
+          filterType: options.type as "electron" | "nw.js" | "native" | undefined,
+          limit: options.limit ? parseInt(options.limit, 10) : undefined,
+        });
+
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        } else {
+          process.stdout.write(`\nMACX: Desktop Application Discovery\n`);
+          process.stdout.write(`${"=".repeat(40)}\n\n`);
+          process.stdout.write(`Platform:      ${result.platform}\n`);
+          process.stdout.write(`Scanned:       ${result.scannedPaths.length} directories\n`);
+          process.stdout.write(`Apps found:    ${result.totalApps}\n`);
+          process.stdout.write(`Duration:      ${result.durationMs}ms\n\n`);
+
+          if (result.apps.length === 0) {
+            process.stdout.write(`  No applications found.\n`);
+          } else {
+            // Group by type
+            const byType = new Map<string, typeof result.apps>();
+            for (const app of result.apps) {
+              const group = byType.get(app.type) ?? [];
+              group.push(app);
+              byType.set(app.type, group);
+            }
+
+            for (const [appType, apps] of byType) {
+              process.stdout.write(`${appType.toUpperCase()} (${apps.length})\n`);
+              process.stdout.write(`${"-".repeat(30)}\n`);
+              for (const app of apps) {
+                const sizeStr = app.size > 0
+                  ? ` (${(app.size / 1024 / 1024).toFixed(1)} MiB)`
+                  : "";
+                const versionStr = app.version ? ` v${app.version}` : "";
+                const jsTag = app.hasBundledJs ? " 📦JS" : "";
+                const fwTag = app.frameworks.length > 0
+                  ? ` [${app.frameworks.join(", ")}]`
+                  : "";
+                process.stdout.write(`  • ${app.name}${versionStr}${sizeStr}${jsTag}${fwTag}\n`);
+                process.stdout.write(`    ${app.path}\n`);
+              }
+              process.stdout.write(`\n`);
+            }
+          }
+
+          if (result.errors.length > 0) {
+            process.stdout.write(`Warnings (${result.errors.length})\n${"-".repeat(30)}\n`);
+            for (const err of result.errors.slice(0, 10)) process.stdout.write(`  ⚠ ${err}\n`);
+            if (result.errors.length > 10) {
+              process.stdout.write(`  ... and ${result.errors.length - 10} more\n`);
+            }
+            process.stdout.write(`\n`);
+          }
+        }
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        process.stderr.write(`MACX error: ${message}\n`);
+        process.exitCode = 1;
+      }
+    });
+
+  // --- discover-app command (single app) ---
+  cli.command(
+    "discover-app <path>",
+    "Analyze a single application at the given path.",
+  )
+    .option("--json", "Output results as JSON.", { default: false })
+    .action(async (path: string, options: { json: boolean }) => {
+      const absolutePath = resolve(path);
+      logger.info({ path: absolutePath }, "discover-app command invoked");
+
+      try {
+        const app = await discoverSingleApp(absolutePath);
+
+        if (!app) {
+          process.stderr.write(`MACX: No application detected at ${absolutePath}\n`);
+          process.exitCode = 1;
+          return;
+        }
+
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(app, null, 2)}\n`);
+        } else {
+          process.stdout.write(`\nMACX: Application Info\n`);
+          process.stdout.write(`${"=".repeat(40)}\n\n`);
+          process.stdout.write(`Name:          ${app.name}\n`);
+          process.stdout.write(`Path:          ${app.path}\n`);
+          if (app.executable) process.stdout.write(`Executable:    ${app.executable}\n`);
+          if (app.version) process.stdout.write(`Version:       ${app.version}\n`);
+          if (app.bundleId) process.stdout.write(`Bundle ID:     ${app.bundleId}\n`);
+          process.stdout.write(`Type:          ${app.type}\n`);
+          process.stdout.write(`Size:          ${(app.size / 1024 / 1024).toFixed(1)} MiB\n`);
+
+          if (app.frameworks.length > 0) {
+            process.stdout.write(`\nFrameworks\n${"-".repeat(30)}\n`);
+            for (const fw of app.frameworks) process.stdout.write(`  • ${fw}\n`);
+          }
+
+          if (app.hasBundledJs) {
+            process.stdout.write(`\nBundled JavaScript\n${"-".repeat(30)}\n`);
+            for (const p of app.bundledJsPaths) process.stdout.write(`  → ${p}\n`);
           }
 
           process.stdout.write(`\n`);
