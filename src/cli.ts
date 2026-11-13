@@ -6,12 +6,14 @@
  */
 
 import { Cli, z } from "incur";
+import { resolve } from "node:path";
 
 import { snapshotEnvironment } from "./process/snapshotEnvironment.js";
 import { createLogger } from "./logger.js";
 import { parseLogLevel } from "./config/processStart.js";
 import { PRODUCT_IDENTITY } from "./identity.js";
 import { PACKAGE_METADATA } from "./generatedPackageMetadata.js";
+import { analyzeJavaScriptApplication } from "./javascript/index.js";
 
 export interface CliInstance {
   serve: (
@@ -83,25 +85,105 @@ export const createCli = (
       process.stdout.write(`${JSON.stringify(info, null, 2)}\n`);
     });
 
-  // --- analyze-javascript-application command ---
+  // --- analyze-javascript-application command (REAL IMPLEMENTATION) ---
   cli.command(
     "analyze-javascript-application <path>",
     "Analyze an extracted JavaScript or Electron application directory.",
   )
     .option("--json", "Output results as JSON.", { default: false })
-    .action(async (path: string, options: { json: boolean }) => {
-      logger.info({ path, json: options.json }, "analyze-javascript-application");
-      const result = {
-        tool: "analyze-javascript-application",
-        path,
-        note: "MACX simplified edition — full JavaScript analysis requires the complete MACX build.",
-        status: "stub",
-      };
-      if (options.json) {
-        process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
-      } else {
-        process.stdout.write(`MACX: Analyzing JavaScript application at ${path}\n`);
-        process.stdout.write(`Status: stub (simplified edition)\n`);
+    .option("--source-maps", "Include source map resolution.", { default: false })
+    .action(async (path: string, options: { json: boolean; sourceMaps: boolean }) => {
+      const absolutePath = resolve(path);
+      logger.info({ path: absolutePath, json: options.json, sourceMaps: options.sourceMaps }, "analyze-javascript-application");
+
+      try {
+        const analysis = await analyzeJavaScriptApplication(absolutePath, {
+          includeSourceMaps: options.sourceMaps,
+        });
+
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(analysis, null, 2)}\n`);
+        } else {
+          // Human-readable output
+          process.stdout.write(`\nMACX: JavaScript Application Analysis\n`);
+          process.stdout.write(`${"=".repeat(40)}\n\n`);
+          process.stdout.write(`Path:         ${analysis.path}\n`);
+
+          if (analysis.packageInfo) {
+            const pkg = analysis.packageInfo as Record<string, unknown>;
+            if (pkg.name) process.stdout.write(`Package:      ${pkg.name}@${pkg.version ?? "unknown"}\n`);
+            if (pkg.description) process.stdout.write(`Description:  ${pkg.description}\n`);
+          }
+
+          process.stdout.write(`\nSummary\n${"-".repeat(30)}\n`);
+          process.stdout.write(`  Modules:      ${analysis.summary.totalModules}\n`);
+          process.stdout.write(`  Total lines:  ${analysis.summary.totalLines.toLocaleString()}\n`);
+          process.stdout.write(`  Total size:   ${(analysis.summary.totalSize / 1024).toFixed(1)} KiB\n`);
+          process.stdout.write(`  Entry points: ${analysis.summary.entryPoints}\n`);
+          process.stdout.write(`  Import edges: ${analysis.summary.importEdges}\n`);
+          if (analysis.summary.sourceMapCount > 0) {
+            process.stdout.write(`  Source maps:  ${analysis.summary.sourceMapCount}\n`);
+          }
+
+          if (analysis.electronInfo) {
+            process.stdout.write(`\nElectron Application\n${"-".repeat(30)}\n`);
+            process.stdout.write(`  Main process:  ${analysis.electronInfo.mainProcess.length} file(s)\n`);
+            for (const f of analysis.electronInfo.mainProcess) process.stdout.write(`    → ${f}\n`);
+            process.stdout.write(`  Renderer:      ${analysis.electronInfo.renderer.length} file(s)\n`);
+            for (const f of analysis.electronInfo.renderer) process.stdout.write(`    → ${f}\n`);
+            process.stdout.write(`  Preload:       ${analysis.electronInfo.preload.length} file(s)\n`);
+            for (const f of analysis.electronInfo.preload) process.stdout.write(`    → ${f}\n`);
+            process.stdout.write(`  IPC modules:   ${analysis.electronInfo.ipcChannels.length} file(s)\n`);
+          }
+
+          if (analysis.entryPoints.length > 0) {
+            process.stdout.write(`\nEntry Points\n${"-".repeat(30)}\n`);
+            for (const ep of analysis.entryPoints) process.stdout.write(`  → ${ep}\n`);
+          }
+
+          // Show frameworks detected
+          const frameworks = new Set(
+            analysis.modules.map((m) => m.framework).filter(Boolean),
+          );
+          if (frameworks.size > 0) {
+            process.stdout.write(`\nFrameworks Detected\n${"-".repeat(30)}\n`);
+            for (const fw of frameworks) process.stdout.write(`  • ${fw}\n`);
+          }
+
+          // Show top package dependencies
+          const packageImports = new Map<string, number>();
+          for (const mod of analysis.modules) {
+            for (const imp of mod.imports) {
+              if (imp.type === "package") {
+                const pkgName = imp.specifier.startsWith("@")
+                  ? imp.specifier.split("/").slice(0, 2).join("/")
+                  : imp.specifier.split("/")[0]!;
+                packageImports.set(pkgName, (packageImports.get(pkgName) ?? 0) + 1);
+              }
+            }
+          }
+          if (packageImports.size > 0) {
+            const sorted = [...packageImports.entries()].sort((a, b) => b[1] - a[1]).slice(0, 15);
+            process.stdout.write(`\nTop Package Dependencies\n${"-".repeat(30)}\n`);
+            for (const [pkg, count] of sorted) {
+              process.stdout.write(`  ${pkg} (${count} import${count > 1 ? "s" : ""})\n`);
+            }
+          }
+
+          if (analysis.errors.length > 0) {
+            process.stdout.write(`\nWarnings (${analysis.errors.length})\n${"-".repeat(30)}\n`);
+            for (const err of analysis.errors.slice(0, 10)) process.stdout.write(`  ⚠ ${err}\n`);
+            if (analysis.errors.length > 10) {
+              process.stdout.write(`  ... and ${analysis.errors.length - 10} more\n`);
+            }
+          }
+
+          process.stdout.write(`\n`);
+        }
+      } catch (cause) {
+        const message = cause instanceof Error ? cause.message : String(cause);
+        process.stderr.write(`MACX error: ${message}\n`);
+        process.exitCode = 1;
       }
     });
 

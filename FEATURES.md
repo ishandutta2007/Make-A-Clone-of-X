@@ -8,7 +8,7 @@
 |---------|--------|---------|
 | **Stdio transport** | ✅ Working | MCP server over stdin/stdout for agent integration |
 | **`macx_doctor` tool** | ✅ Working | Reports MACX version, Node.js version, platform, and arch |
-| **`analyze_javascript_application` tool** | 🟡 Stub | Accepts path and options; returns stub response (analysis engine not yet wired) |
+| **`analyze_javascript_application` tool** | ✅ Working | Full JS/TS static analysis: module discovery, import/export extraction, Electron detection, framework detection, import graph, entry points, source maps |
 | **`inspect_binary` tool** | 🟡 Stub | Accepts binary path and provider selection; returns stub response |
 | **`inspect_website` tool** | 🟡 Stub | Accepts URL and screenshot flag; returns stub response |
 | **Zod input validation** | ✅ Working | All MCP tool inputs validated via Zod schemas |
@@ -22,7 +22,7 @@
 | **`macx version`** | ✅ Working | Prints package name, version, Node.js, platform, arch as JSON |
 | **`macx setup`** | 🟡 Manual | Prints manual MCP registration instructions (no interactive wizard yet) |
 | **`macx update`** | 🟡 Manual | Prints `npm install --global` instructions (no automated updater yet) |
-| **`macx analyze-javascript-application <path>`** | 🟡 Stub | Accepts path with `--json` flag; returns stub response |
+| **`macx analyze-javascript-application <path>`** | ✅ Working | Full JS/TS static analysis with human-readable and `--json` output; `--source-maps` option |
 | **`macx --help`** | ✅ Working | Built-in help via Incur CLI framework |
 | **`macx --version`** | ✅ Working | Version output via Incur |
 
@@ -49,7 +49,7 @@
 
 | Feature | Priority | Description |
 |---------|----------|-------------|
-| **JavaScript/Electron static analysis engine** | 🔴 P0 | Actual module graph extraction, import resolution, source map parsing, and Electron IPC tracing for JS apps. This is the most impactful feature since it requires **no external provider** (Hopper/Ghidra/IDA) and can work standalone. |
+| ~~**JavaScript/Electron static analysis engine**~~ | ✅ Done | ~~Actual module graph extraction, import resolution, source map parsing, and Electron IPC tracing for JS apps.~~ Implemented in v1.0.0 — see `src/javascript/`. |
 | **Desktop application discovery** | 🔴 P0 | Scan common install locations on macOS/Windows/Linux to find installed apps, their executables, bundled JS, and frameworks. Enables the core "see a feature → clone it" workflow. |
 | **Interactive setup wizard** | 🔴 P0 | Walk the user through agent registration (Claude Code, Codex, Cursor, Gemini CLI, etc.) with config file detection, backup, and write — replacing the current manual instructions. |
 
