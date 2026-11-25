@@ -15,6 +15,13 @@ import { PRODUCT_IDENTITY } from "./identity.js";
 import { PACKAGE_METADATA } from "./generatedPackageMetadata.js";
 import { analyzeJavaScriptApplication } from "./javascript/index.js";
 import { discoverApplications, discoverSingleApp } from "./discovery/index.js";
+import {
+  detectAgents,
+  registerWithAgent,
+  registerWithAllAgents,
+  SUPPORTED_AGENTS,
+  buildMcpServerEntry,
+} from "./setup/index.js";
 
 export interface CliInstance {
   serve: (
@@ -316,23 +323,157 @@ export const createCli = (
       }
     });
 
-  // --- setup command ---
+  // --- setup command (INTERACTIVE WIZARD) ---
   cli.command("setup", "Configure MACX with your agents and analysis providers.")
-    .action(async () => {
-      logger.info("setup command invoked");
-      process.stdout.write(
-        `MACX Setup\n` +
-        `==========\n\n` +
-        `MACX simplified edition — setup wizard is available in the complete MACX build.\n` +
-        `\n` +
-        `Manual MCP configuration:\n` +
-        `  Add the following to your agent's MCP server configuration:\n\n` +
-        `  "macx": {\n` +
-        `    "command": "npx",\n` +
-        `    "args": ["-y", "${PACKAGE_METADATA.name}@${PACKAGE_METADATA.version}", "mcp"]\n` +
-        `  }\n\n` +
-        `Then restart your agent.\n`,
-      );
+    .option("--agent <id>", "Register with a specific agent only (e.g., claude-desktop, cursor, gemini-cli).")
+    .option("--all", "Register with all detected agents at once.", { default: false })
+    .option("--list", "List all supported agents and their config paths.", { default: false })
+    .option("--detect", "Detect installed agents and their registration status.", { default: false })
+    .option("--dry-run", "Show what would be changed without writing files.", { default: false })
+    .option("--force", "Overwrite existing MACX registration.", { default: false })
+    .option("--no-backup", "Skip creating a backup of existing config files.", { default: false })
+    .option("--json", "Output results as JSON.", { default: false })
+    .action(async (options: {
+      agent?: string;
+      all: boolean;
+      list: boolean;
+      detect: boolean;
+      dryRun: boolean;
+      force: boolean;
+      backup?: boolean;
+      json: boolean;
+    }) => {
+      logger.info({ options }, "setup command invoked");
+
+      // --- List supported agents ---
+      if (options.list) {
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(SUPPORTED_AGENTS, null, 2)}\n`);
+        } else {
+          process.stdout.write(`\nMACX: Supported Agents\n`);
+          process.stdout.write(`${"=".repeat(40)}\n\n`);
+          for (const agent of SUPPORTED_AGENTS) {
+            process.stdout.write(`  ${agent.id.padEnd(20)} ${agent.displayName}\n`);
+            if (agent.docsUrl) process.stdout.write(`  ${"".padEnd(20)} ${agent.docsUrl}\n`);
+          }
+          process.stdout.write(`\nUse \`macx setup --detect\` to see which are installed.\n\n`);
+        }
+        return;
+      }
+
+      // --- Detect installed agents ---
+      if (options.detect) {
+        const detected = await detectAgents();
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(detected, null, 2)}\n`);
+        } else {
+          process.stdout.write(`\nMACX: Agent Detection\n`);
+          process.stdout.write(`${"=".repeat(40)}\n\n`);
+          for (const d of detected) {
+            const status = d.macxRegistered
+              ? "✅ MACX registered"
+              : d.configExists
+                ? "⬜ Config found (MACX not registered)"
+                : "❌ No config file";
+            process.stdout.write(`  ${d.agent.displayName.padEnd(30)} ${status}\n`);
+            process.stdout.write(`  ${"".padEnd(30)} ${d.configPath}\n\n`);
+          }
+          process.stdout.write(`Use \`macx setup --all\` to register MACX with all detected agents.\n`);
+          process.stdout.write(`Use \`macx setup --agent <id>\` to register with a specific agent.\n\n`);
+        }
+        return;
+      }
+
+      // --- Register with a specific agent ---
+      if (options.agent) {
+        const detected = await detectAgents();
+        const target = detected.find((d) => d.agent.id === options.agent);
+        if (!target) {
+          process.stderr.write(
+            `MACX error: Unknown agent "${options.agent}". ` +
+            `Use \`macx setup --list\` to see supported agents.\n`,
+          );
+          process.exitCode = 1;
+          return;
+        }
+
+        if (options.dryRun) {
+          process.stdout.write(`\nDRY RUN: Would register MACX with ${target.agent.displayName}\n`);
+          process.stdout.write(`  Config: ${target.configPath}\n`);
+          process.stdout.write(`  Exists: ${target.configExists ? "yes" : "no"}\n`);
+          process.stdout.write(`  Already registered: ${target.macxRegistered ? "yes" : "no"}\n\n`);
+          return;
+        }
+
+        const result = await registerWithAgent(target.agent, target.configPath, {
+          noBackup: options.backup === false,
+          force: options.force,
+        });
+
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+        } else {
+          printSetupResult(result);
+        }
+        return;
+      }
+
+      // --- Register with all agents ---
+      if (options.all) {
+        const results = await registerWithAllAgents({
+          noBackup: options.backup === false,
+          force: options.force,
+          dryRun: options.dryRun,
+        });
+
+        if (options.json) {
+          process.stdout.write(`${JSON.stringify(results, null, 2)}\n`);
+        } else {
+          process.stdout.write(`\nMACX: Setup Results\n`);
+          process.stdout.write(`${"=".repeat(40)}\n\n`);
+          for (const result of results) {
+            printSetupResult(result);
+          }
+
+          const successCount = results.filter((r) => r.success).length;
+          const skipCount = results.filter((r) => r.alreadyRegistered && !options.force).length;
+          process.stdout.write(`\nSummary: ${successCount} registered, ${skipCount} already set up\n`);
+          process.stdout.write(`Restart your agents to activate MACX.\n\n`);
+        }
+        return;
+      }
+
+      // --- Default: show interactive help ---
+      const detected = await detectAgents();
+      const withConfig = detected.filter((d) => d.configExists);
+      const registered = detected.filter((d) => d.macxRegistered);
+
+      process.stdout.write(`\nMACX Setup Wizard\n`);
+      process.stdout.write(`${"=".repeat(40)}\n\n`);
+      process.stdout.write(`Detected ${detected.length} supported agents, ${withConfig.length} with config files, ${registered.length} with MACX registered.\n\n`);
+
+      if (withConfig.length === 0) {
+        process.stdout.write(`No agent config files found. MACX supports:\n\n`);
+        for (const agent of SUPPORTED_AGENTS) {
+          process.stdout.write(`  • ${agent.displayName} (${agent.id})\n`);
+        }
+        process.stdout.write(`\nInstall one of these agents, then run \`macx setup\` again.\n`);
+        process.stdout.write(`\nManual MCP configuration:\n`);
+        const entry = buildMcpServerEntry();
+        process.stdout.write(`  Add to your agent's MCP server config:\n\n`);
+        process.stdout.write(`  "macx": ${JSON.stringify(entry, null, 4).replace(/\n/g, "\n  ")}\n\n`);
+      } else {
+        for (const d of detected) {
+          if (!d.configExists) continue;
+          const status = d.macxRegistered ? "✅" : "⬜";
+          process.stdout.write(`  ${status} ${d.agent.displayName} (${d.agent.id})\n`);
+        }
+        process.stdout.write(`\nQuick commands:\n`);
+        process.stdout.write(`  macx setup --all         Register MACX with all detected agents\n`);
+        process.stdout.write(`  macx setup --agent <id>  Register with a specific agent\n`);
+        process.stdout.write(`  macx setup --detect      Show detailed detection status\n`);
+        process.stdout.write(`  macx setup --dry-run     Preview changes without writing\n\n`);
+      }
     });
 
   // --- update command ---
@@ -348,3 +489,20 @@ export const createCli = (
 
   return cli as unknown as CliInstance;
 };
+
+/** Print a single setup result in human-readable format. */
+function printSetupResult(result: import("./setup/types.js").SetupResult): void {
+  const icon = result.success ? (result.alreadyRegistered ? "⏭️" : "✅") : "❌";
+  process.stdout.write(`  ${icon} ${result.agentName}\n`);
+  if (result.alreadyRegistered && result.success) {
+    process.stdout.write(`    Already registered — skipped.\n`);
+  } else if (result.success) {
+    process.stdout.write(`    Registered in ${result.configPath}\n`);
+    if (result.backupPath) {
+      process.stdout.write(`    Backup: ${result.backupPath}\n`);
+    }
+  } else {
+    process.stdout.write(`    Error: ${result.error}\n`);
+  }
+  process.stdout.write(`\n`);
+}

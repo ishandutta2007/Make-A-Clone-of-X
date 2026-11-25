@@ -22,7 +22,7 @@
 |---------|--------|---------|
 | **`macx doctor`** | ✅ Working | Readiness check; reports version, Node.js, platform, provider status |
 | **`macx version`** | ✅ Working | Prints package name, version, Node.js, platform, arch as JSON |
-| **`macx setup`** | 🟡 Manual | Prints manual MCP registration instructions (no interactive wizard yet) |
+| **`macx setup`** | ✅ Working | Interactive setup wizard: agent detection, config backup, MCP registration with `--all`, `--agent`, `--detect`, `--dry-run` |
 | **`macx update`** | 🟡 Manual | Prints `npm install --global` instructions (no automated updater yet) |
 | **`macx analyze-javascript-application <path>`** | ✅ Working | Full JS/TS static analysis with human-readable and `--json` output; `--source-maps` option |
 | **`macx discover-apps`** | ✅ Working | Scan system for installed desktop apps with `--json`, `--type`, `--limit` options |
@@ -55,7 +55,7 @@
 |---------|----------|-------------|
 | ~~**JavaScript/Electron static analysis engine**~~ | ✅ Done | ~~Actual module graph extraction, import resolution, source map parsing, and Electron IPC tracing for JS apps.~~ Implemented in v1.0.0 — see `src/javascript/`. |
 | ~~**Desktop application discovery**~~ | ✅ Done | ~~Scan common install locations on macOS/Windows/Linux to find installed apps, their executables, bundled JS, and frameworks.~~ Implemented in v1.0.0 — see `src/discovery/`. |
-| **Interactive setup wizard** | 🔴 P0 | Walk the user through agent registration (Claude Code, Codex, Cursor, Gemini CLI, etc.) with config file detection, backup, and write — replacing the current manual instructions. |
+| ~~**Interactive setup wizard**~~ | ✅ Done | ~~Walk the user through agent registration (Claude Code, Codex, Cursor, Gemini CLI, etc.) with config file detection, backup, and write.~~ Implemented in v1.0.0 — see `src/setup/`. |
 
 ### 🟠 High — Important for Production Use
 

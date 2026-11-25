@@ -94,11 +94,48 @@ macx discover-app "C:\Program Files\VS Code" --json
 
 ### `macx setup`
 
-Configure MACX with your agents and analysis providers.
+Interactive setup wizard that detects installed AI agents, locates their MCP config files, and registers the MACX MCP server.
+
+**Supported agents:** Claude Desktop, Claude Code, Cursor, Windsurf, VS Code (GitHub Copilot), Gemini CLI, OpenAI Codex CLI, Zed.
 
 ```bash
+# Interactive overview — shows detected agents and quick commands
 macx setup
+
+# List all supported agents
+macx setup --list
+
+# Detect installed agents and registration status
+macx setup --detect
+
+# Register MACX with all detected agents
+macx setup --all
+
+# Register with a specific agent
+macx setup --agent cursor
+
+# Preview changes without writing
+macx setup --all --dry-run
+
+# Force re-register (update existing entry)
+macx setup --agent claude-desktop --force
+
+# JSON output
+macx setup --detect --json
 ```
+
+**Options:**
+
+| Option | Description |
+|--------|-------------|
+| `--list` | List all supported agents and their config paths |
+| `--detect` | Detect installed agents and their MACX registration status |
+| `--all` | Register MACX with all detected agents at once |
+| `--agent <id>` | Register with a specific agent (e.g., `cursor`, `claude-desktop`, `gemini-cli`) |
+| `--dry-run` | Show what would be changed without writing files |
+| `--force` | Overwrite existing MACX registration |
+| `--no-backup` | Skip creating a backup of existing config files |
+| `--json` | Output results as JSON |
 
 ### `macx update`
 
